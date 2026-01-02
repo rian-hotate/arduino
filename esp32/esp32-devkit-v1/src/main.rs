@@ -1,16 +1,16 @@
 mod app;
-mod config;
 mod common;
+mod config;
 
 use esp_idf_sys::link_patches;
 
-use crate::app::tasks;
+use crate::{app::tasks::TaskManager, common::Result};
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     link_patches();
 
-    // タスク起動（ここで全部立ち上げる）
-    tasks::start()?;
+    let mut manager = TaskManager::new();
+    manager.start()?;
 
     // mainは生かしておく（タスク側が動き続ける）
     loop {
