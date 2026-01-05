@@ -9,7 +9,6 @@ use crate::common::{Error, Result};
 
 /// LEDタスク（スレッド）を表す構造体
 pub struct LedTask {
-    // join したいなら保持。join しないなら _handle でもOK
     _handle: JoinHandle<()>,
 }
 
@@ -35,12 +34,5 @@ impl LedTask {
             .map_err(|e| Error::new_unexpected(&format!("failed to spawn led_task: {e}")))?;
 
         Ok(Self { _handle: handle })
-    }
-
-    /// 必要なら停止APIも後から追加できる（Atomicのstop flag等）
-    pub fn is_running(&self) -> bool {
-        // Rust標準のJoinHandleには「生存チェック」がないので、
-        // ここは stop flag 実装後に意味を持たせるのが現実的
-        true
     }
 }

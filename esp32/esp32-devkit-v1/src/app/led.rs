@@ -1,5 +1,5 @@
 use esp_idf_hal::delay::FreeRtos;
-use esp_idf_hal::gpio::{Gpio13, Output, PinDriver};
+use esp_idf_hal::gpio::{Gpio12, Output, PinDriver};
 
 use crate::common::{Error, Result};
 
@@ -26,13 +26,13 @@ impl From<u8> for LedState {
 }
 
 pub struct Led {
-    pin: PinDriver<'static, Gpio13, Output>,
+    pin: PinDriver<'static, Gpio12, Output>,
     state: LedState,
     phase_on: bool, // 点滅のON/OFF位相
 }
 
 impl Led {
-    pub fn new(pin: PinDriver<'static, Gpio13, Output>) -> Self {
+    pub fn new(pin: PinDriver<'static, Gpio12, Output>) -> Self {
         Self {
             pin,
             state: LedState::Off,

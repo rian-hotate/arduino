@@ -3,8 +3,8 @@ use std::thread::{self, JoinHandle};
 
 use esp_idf_hal::delay::FreeRtos;
 
+use crate::app::ble::ConnState;
 use crate::app::button::Button;
-use crate::app::led::LedState;
 use crate::app::tasks::Tasks;
 use crate::common::{Error, Result};
 
@@ -13,31 +13,44 @@ pub struct ButtonTask {
 }
 
 impl ButtonTask {
-    pub fn start(tasks: Arc<Tasks>, mut button: Button) -> Result<Self> {
-        let handle = thread::Builder::new()
-            .name("button_task".to_string())
-            .spawn(move || loop {
-                if button.poll_pressed_edge() {
-                    let next = match tasks.get_led_state() {
-                        LedState::Off => LedState::BlinkingSlow,
-                        LedState::BlinkingSlow => LedState::BlinkingFast,
-                        LedState::BlinkingFast => LedState::On,
-                        LedState::On => LedState::Off,
-                        LedState::Error => LedState::Off,
-                    };
-                    tasks.set_led_state(next);
+    pub fn start(tasks: Arc<Tasks>, button: Button) -> Result<Self> {
+        let h = thread::Builder::new()
+            .name("button_task".into())
+            .stack_size(4096)
+            .spawn(move || {
+                // 設定値
+                const POLL_MS: u32 = 20;
+                const LONG_PRESS_MS: u32 = 3000;
+
+                // 状態
+                let mut pressed_ms: u32 = 0;
+                let mut fired: bool = false;
+
+                loop {
+                    let pressed = button.is_pressed();
+
+                    if pressed {
+                        // 押下継続
+                        if pressed_ms < LONG_PRESS_MS {
+                            pressed_ms = pressed_ms.saturating_add(POLL_MS);
+                        }
+
+                        // 3秒到達で1回だけ発火
+                        if !fired && pressed_ms >= LONG_PRESS_MS {
+                            tasks.set_ble_conn_state(ConnState::Pairing);
+                            fired = true;
+                        }
+                    } else {
+                        // 離したらリセット
+                        pressed_ms = 0;
+                        fired = false;
+                    }
+
+                    FreeRtos::delay_ms(POLL_MS);
                 }
-                FreeRtos::delay_ms(10);
             })
             .map_err(|e| Error::new_unexpected(&format!("failed to spawn button_task: {e}")))?;
 
-        Ok(Self { _handle: handle })
-    }
-
-    /// 必要なら停止APIも後から追加できる（Atomicのstop flag等）
-    pub fn is_running(&self) -> bool {
-        // Rust標準のJoinHandleには「生存チェック」がないので、
-        // ここは stop flag 実装後に意味を持たせるのが現実的
-        true
+        Ok(Self { _handle: h })
     }
 }

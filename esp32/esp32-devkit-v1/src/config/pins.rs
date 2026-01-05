@@ -1,9 +1,9 @@
 use crate::common::{Error, Result};
-use esp_idf_hal::gpio::{Gpio13, Gpio14, Input, Output, PinDriver, Pull};
+use esp_idf_hal::gpio::{Gpio12, Gpio14, Input, Output, PinDriver, Pull};
 use esp_idf_hal::peripherals::Peripherals;
 
 pub struct Pins {
-    pub led: PinDriver<'static, Gpio13, Output>,
+    pub led: PinDriver<'static, Gpio12, Output>,
     pub button: PinDriver<'static, Gpio14, Input>,
 }
 
@@ -12,7 +12,7 @@ impl Pins {
         let peripherals = Peripherals::take()
             .map_err(|e| Error::new_esp(&format!("failed to take peripherals: {e}")))?;
 
-        let led = PinDriver::output(peripherals.pins.gpio13)
+        let led = PinDriver::output(peripherals.pins.gpio12)
             .map_err(|e| Error::new_esp(&format!("failed to output: {e}")))?;
 
         let mut button = PinDriver::input(peripherals.pins.gpio14)
