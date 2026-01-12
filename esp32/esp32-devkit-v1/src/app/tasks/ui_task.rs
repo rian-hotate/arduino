@@ -4,8 +4,7 @@ use std::thread::{self, JoinHandle};
 use esp_idf_hal::delay::FreeRtos;
 
 use super::Tasks;
-use crate::app::ble::ConnState;
-use crate::app::led::LedState;
+use crate::app::ble::BleState;
 use crate::common::{Error, Result};
 
 pub struct UiTask {
@@ -19,19 +18,18 @@ impl UiTask {
             .stack_size(4096)
             .spawn(move || {
                 // 前回値を持って、変化があった時だけLED状態を書き換える
-                let mut last_conn = ConnState::Idle;
+                let mut last_conn = BleState::Idle;
 
                 loop {
                     let conn = tasks.get_ble_conn_state();
                     if conn != last_conn {
                         let led = match conn {
-                            ConnState::Pairing => LedState::BlinkingFast,
-                            ConnState::Connected => LedState::On,
-                            ConnState::Disconnected => LedState::BlinkingSlow,
-                            ConnState::Idle => LedState::Off,
-                            ConnState::Error => LedState::Error,
+                            BleState::Pairing => tasks,
+                            BleState::Connected => LedState::On,
+                            BleState::Disconnected => LedState::BlinkingSlow,
+                            BleState::Idle => LedState::Off,
+                            BleState::Error => LedState::Error,
                         };
-                        tasks.set_led_state(led);
                         last_conn = conn;
                     }
 

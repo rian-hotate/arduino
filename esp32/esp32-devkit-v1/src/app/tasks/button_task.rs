@@ -3,7 +3,7 @@ use std::thread::{self, JoinHandle};
 
 use esp_idf_hal::delay::FreeRtos;
 
-use crate::app::ble::ConnState;
+use crate::app::ble::BleState;
 use crate::app::button::Button;
 use crate::app::tasks::Tasks;
 use crate::common::{Error, Result};
@@ -37,7 +37,7 @@ impl ButtonTask {
 
                         // 3秒到達で1回だけ発火
                         if !fired && pressed_ms >= LONG_PRESS_MS {
-                            tasks.set_ble_conn_state(ConnState::Pairing);
+                            tasks.set_ble_conn_state(BleState::Pairing);
                             fired = true;
                         }
                     } else {
