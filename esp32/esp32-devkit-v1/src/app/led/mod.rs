@@ -1,4 +1,4 @@
-mod led_command;
+pub mod led_command;
 mod led_event;
 pub mod led_handle;
 mod led_runner;
@@ -11,7 +11,9 @@ use crate::app::led::led_command::LedCommand;
 use crate::common::{Error, Result};
 
 pub struct Led {
+    #[allow(dead_code)]
     pin: PinDriver<'static, Gpio12, Output>,
+    #[allow(dead_code)]
     phase_on: bool, // 点滅のON/OFF位相
 }
 
@@ -23,6 +25,7 @@ impl Led {
         }
     }
 
+    #[allow(dead_code)]
     fn tick(&mut self, interval_ms: u32) -> Result<()> {
         // 位相を反転して1ステップだけ実行
 
@@ -36,6 +39,7 @@ impl Led {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn on(&mut self) -> Result<()> {
         self.pin
             .set_high()
@@ -43,6 +47,7 @@ impl Led {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn off(&mut self) -> Result<()> {
         self.pin
             .set_low()

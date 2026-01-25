@@ -1,91 +1,70 @@
-pub mod ble_task;
-pub mod button_task;
-pub mod ui_task;
+pub mod event_coordinator;
+pub mod task_manager;
 
-use core::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc, Mutex};
 
-use crate::app::{
-    ble::BleState,
-    button::Button,
-    led::{led_handle::LedHandle, led_task::LedTask, Led},
-    tasks::{ble_task::BleTask, ui_task::UiTask},
-};
-use crate::common::Result;
-use crate::config::pins::Pins;
+use crate::app::ble::{ble_event::BleEvent, ble_handle::BleHandle};
+use crate::app::button::event::ButtonEvent;
+use crate::app::led::led_handle::LedHandle;
 
-/// タスク間共有の状態を持つ構造体
+pub use task_manager::TaskManager;
+
+/// タスク間共有の状態を持つ構造体（各タスクのハンドルを保持）
 pub struct Tasks {
-    conn_state: AtomicU8,
+    led_handle: Mutex<Option<LedHandle>>,
+    ble_handle: Mutex<Option<BleHandle>>,
+    button_event_tx: Mutex<Option<mpsc::Sender<ButtonEvent>>>,
+    ble_event_tx: Mutex<Option<mpsc::Sender<BleEvent>>>,
 }
 
 impl Tasks {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            conn_state: AtomicU8::new(BleState::Idle as u8),
+            led_handle: Mutex::new(None),
+            ble_handle: Mutex::new(None),
+            button_event_tx: Mutex::new(None),
+            ble_event_tx: Mutex::new(None),
         })
     }
-}
 
-/// タスク起動の入口
-pub struct TaskManager {
-    pub tasks: Arc<Tasks>,
+    pub fn set_led_handle(&self, handle: LedHandle) {
+        *self.led_handle.lock().unwrap() = Some(handle);
+    }
 
-    led_task: Option<LedTask>,
-    pub led_handler: Option<LedHandle>,
-    button_task: Option<button_task::ButtonTask>,
-    ble_task: Option<ble_task::BleTask>,
-    ui_task: Option<ui_task::UiTask>,
-}
+    pub fn set_ble_handle(&self, handle: BleHandle) {
+        *self.ble_handle.lock().unwrap() = Some(handle);
+    }
 
-impl TaskManager {
-    pub fn new() -> Self {
-        Self {
-            tasks: Tasks::new(),
-            led_handler: None,
-            led_task: None,
-            button_task: None,
-            ble_task: None,
-            ui_task: None,
+    pub fn send_led_command(&self, cmd: crate::app::led::led_command::LedCommand) {
+        if let Some(handle) = self.led_handle.lock().unwrap().as_ref() {
+            let _ = handle.tx.send(cmd);
         }
     }
 
-    pub fn start(&mut self) -> Result<()> {
-        let pins = Pins::take()?;
-        let led = Led::new(pins.led);
-        let button = Button::new(pins.button)?;
-
-        self.start_led_task(led)?;
-        self.start_button_task(button)?;
-        self.start_ble_task()?;
-        self.start_ui_task()?;
-
-        Ok(())
+    #[allow(dead_code)]
+    pub fn send_ble_command(&self, cmd: crate::app::ble::ble_command::BleCommand) {
+        if let Some(handle) = self.ble_handle.lock().unwrap().as_ref() {
+            let _ = handle.tx.send(cmd);
+        }
     }
 
-    fn start_led_task(&mut self, led: crate::app::led::Led) -> Result<()> {
-        let (led_task, led_handle) = LedTask::start(led)?;
-        self.led_task = Some(led_task);
-        self.led_handler = Some(led_handle.clone());
-
-        Ok(())
+    pub fn set_button_event_tx(&self, tx: mpsc::Sender<ButtonEvent>) {
+        *self.button_event_tx.lock().unwrap() = Some(tx);
     }
 
-    fn start_button_task(&mut self, button: crate::app::button::Button) -> Result<()> {
-        let t = button_task::ButtonTask::start(self.tasks.clone(), button)?;
-        self.button_task = Some(t);
-        Ok(())
+    pub fn send_button_event(&self, event: ButtonEvent) {
+        if let Some(tx) = self.button_event_tx.lock().unwrap().as_ref() {
+            let _ = tx.send(event);
+        }
     }
 
-    fn start_ble_task(&mut self) -> Result<()> {
-        let t = BleTask::start(self.tasks.clone())?;
-        self.ble_task = Some(t);
-        Ok(())
+    pub fn set_ble_event_tx(&self, tx: mpsc::Sender<BleEvent>) {
+        *self.ble_event_tx.lock().unwrap() = Some(tx);
     }
 
-    fn start_ui_task(&mut self) -> Result<()> {
-        let t = UiTask::start(self.tasks.clone())?;
-        self.ui_task = Some(t);
-        Ok(())
+    pub fn send_ble_event(&self, event: BleEvent) {
+        if let Some(tx) = self.ble_event_tx.lock().unwrap().as_ref() {
+            let _ = tx.send(event);
+        }
     }
 }

@@ -2,7 +2,7 @@ use esp_idf_hal::delay::FreeRtos;
 
 use crate::{
     app::{
-        ble::{ble_command::BleCommand, ble_handle::BleHandle, ble_state::BleState, Ble},
+        ble::{ble_command::BleCommand, ble_event::BleEvent, ble_handle::BleHandle, Ble},
         tasks::Tasks,
     },
     common::{Error, Result},
@@ -14,6 +14,7 @@ use std::{
 };
 
 pub struct BleTask {
+    #[allow(dead_code)]
     handle: JoinHandle<()>,
 }
 
@@ -34,7 +35,7 @@ impl BleTask {
                         match cmd {
                             BleCommand::StartAdvertise { timeout_ms } => {
                                 if ble.start_pairing().is_ok() {
-                                    tasks.set_ble_conn_state(BleState::Advertising);
+                                    tasks.send_ble_event(BleEvent::AdvertisingStarted);
                                     pairing_deadline = Some(
                                         Instant::now() + Duration::from_millis(timeout_ms as u64),
                                     );
@@ -42,23 +43,23 @@ impl BleTask {
                             }
                             BleCommand::StopAdvertise => {
                                 let _ = ble.stop_pairing();
-                                tasks.set_ble_conn_state(BleState::Idle);
+                                tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 pairing_deadline = None;
                             }
                             BleCommand::Shutdown => {
                                 let _ = ble.on_disconnected();
-                                tasks.set_ble_conn_state(BleState::Idle);
+                                tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 return;
                             }
                             _ => { /* 他コマンドは未実装 */ }
                         }
                     }
 
-                    // 60秒タイムアウト
+                    // タイムアウト処理
                     if let Some(deadline) = pairing_deadline {
                         if Instant::now() >= deadline {
                             let _ = ble.stop_pairing();
-                            tasks.set_ble_conn_state(BleState::Idle);
+                            tasks.send_ble_event(BleEvent::AdvertisingStopped);
                             pairing_deadline = None;
                         }
                     }

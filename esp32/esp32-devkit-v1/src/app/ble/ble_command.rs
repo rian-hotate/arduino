@@ -1,4 +1,5 @@
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum BleCommand {
     StartAdvertise { timeout_ms: u32 },
     StopAdvertise,

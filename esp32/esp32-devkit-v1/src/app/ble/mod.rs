@@ -1,9 +1,9 @@
-mod ble_command;
-mod ble_event;
-mod ble_handle;
+pub mod ble_command;
+pub mod ble_event;
+pub mod ble_handle;
 mod ble_runner;
 mod ble_state;
-mod ble_task;
+pub mod ble_task;
 
 use esp32_nimble::{
     utilities::mutex::Mutex, uuid128, BLEAdvertisementData, BLEAdvertising, BLEDevice, BLEServer,
@@ -92,6 +92,7 @@ impl Ble {
     }
 
     /// 接続状態に応じた後処理（任意：必要になったら）
+    #[allow(dead_code)]
     pub fn on_connected(&mut self) -> Result<()> {
         // TODO: 接続後の処理
         Ok(())

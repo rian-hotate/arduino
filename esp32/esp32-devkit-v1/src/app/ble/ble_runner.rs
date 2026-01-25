@@ -3,16 +3,18 @@ use std::sync::mpsc;
 use esp32_nimble::BLEDevice;
 
 use crate::app::ble::ble_event::BleEvent;
-use crate::common::{Error, Result};
+use crate::common::Result;
 
+#[allow(dead_code)]
 struct BleRunner {
     // ここに server / adv / service などを持つ
     // server: BLEServer,
     // adv: esp32_nimble::BLEAdvertising, or Mutex<...> etc
 }
 
+#[allow(dead_code)]
 impl BleRunner {
-    fn new(evt_tx: &mpsc::Sender<BleEvent>) -> Self {
+    fn new(_evt_tx: &mpsc::Sender<BleEvent>) -> Self {
         BLEDevice::init();
 
         // ここで server/service/characteristic/callback をセット

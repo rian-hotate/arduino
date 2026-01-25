@@ -1,5 +1,6 @@
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum BleState {
     Idle = 0,
     Advertising = 1,
