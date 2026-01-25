@@ -1,4 +1,3 @@
-#[repr(u8)]
 #[derive(PartialEq, Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub enum LedCommand {

@@ -2,6 +2,7 @@ use esp_idf_hal::delay::FreeRtos;
 
 use crate::app::led::led_handle::LedHandle;
 use crate::app::led::{Led, LedCommand};
+use crate::common::{Error, Result};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
@@ -12,7 +13,7 @@ pub struct LedTask {
 }
 
 impl LedTask {
-    pub fn start(mut led: Led) -> (Self, LedHandle) {
+    pub fn start(mut led: Led) -> Result<(Self, LedHandle)> {
         let (tx, rx) = mpsc::channel::<LedCommand>();
 
         let handle = thread::Builder::new()
@@ -40,6 +41,7 @@ impl LedTask {
                             }
                             LedCommand::Blink { interval_ms } => {
                                 blink_interval = Some(interval_ms.max(20));
+                                phase_on = false;
                                 elapsed_ms = 0;
                             }
                             LedCommand::Shutdown => return,
@@ -66,8 +68,8 @@ impl LedTask {
                     FreeRtos::delay_ms(20);
                 }
             })
-            .unwrap();
+            .map_err(|e| Error::new_unexpected(&format!("failed to spawn led_task: {e}")))?;
 
-        (Self { handle }, LedHandle { tx })
+        Ok((Self { handle }, LedHandle { tx }))
     }
 }

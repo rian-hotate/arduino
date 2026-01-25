@@ -35,16 +35,16 @@ impl TaskManager {
         let led = Led::new(pins.led);
         let button = Button::new(pins.button)?;
 
+        self.start_event_coordinator()?;
         self.start_led_task(led)?;
         self.start_button_task(button)?;
         self.start_ble_task()?;
-        self.start_event_coordinator()?;
 
         Ok(())
     }
 
     fn start_led_task(&mut self, led: Led) -> Result<()> {
-        let (led_task, led_handle) = LedTask::start(led);
+        let (led_task, led_handle) = LedTask::start(led)?;
         self.led_task = Some(led_task);
         self.tasks.set_led_handle(led_handle);
 

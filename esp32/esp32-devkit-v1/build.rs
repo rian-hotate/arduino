@@ -41,6 +41,10 @@ fn generate_pins_config() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if cfg.led == cfg.button {
+        return Err(format!("led and button pins must differ: {}", cfg.led).into());
+    }
+
     let led_ty = pin_type(cfg.led)?;
     let button_ty = pin_type(cfg.button)?;
 

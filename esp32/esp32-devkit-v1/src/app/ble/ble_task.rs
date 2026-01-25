@@ -34,11 +34,18 @@ impl BleTask {
                     while let Ok(cmd) = rx.try_recv() {
                         match cmd {
                             BleCommand::StartAdvertise { timeout_ms } => {
-                                if ble.start_pairing().is_ok() {
-                                    tasks.send_ble_event(BleEvent::AdvertisingStarted);
-                                    pairing_deadline = Some(
-                                        Instant::now() + Duration::from_millis(timeout_ms as u64),
-                                    );
+                                match ble.start_pairing() {
+                                    Ok(()) => {
+                                        tasks.send_ble_event(BleEvent::AdvertisingStarted);
+                                        pairing_deadline = Some(
+                                            Instant::now()
+                                                + Duration::from_millis(timeout_ms as u64),
+                                        );
+                                    }
+                                    Err(e) => {
+                                        tasks.send_ble_event(BleEvent::Error);
+                                        eprintln!("failed to start pairing: {e}");
+                                    }
                                 }
                             }
                             BleCommand::StopAdvertise => {

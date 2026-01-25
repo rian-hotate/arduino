@@ -28,43 +28,89 @@ impl Tasks {
     }
 
     pub fn set_led_handle(&self, handle: LedHandle) {
-        *self.led_handle.lock().unwrap() = Some(handle);
+        *self.led_handle.lock().expect("led_handle mutex poisoned") = Some(handle);
     }
 
     pub fn set_ble_handle(&self, handle: BleHandle) {
-        *self.ble_handle.lock().unwrap() = Some(handle);
+        *self.ble_handle.lock().expect("ble_handle mutex poisoned") = Some(handle);
     }
 
     pub fn send_led_command(&self, cmd: crate::app::led::led_command::LedCommand) {
-        if let Some(handle) = self.led_handle.lock().unwrap().as_ref() {
-            let _ = handle.tx.send(cmd);
+        match self
+            .led_handle
+            .lock()
+            .expect("led_handle mutex poisoned")
+            .as_ref()
+        {
+            Some(handle) => {
+                if let Err(e) = handle.tx.send(cmd) {
+                    eprintln!("failed to send led command: {e}");
+                }
+            }
+            None => eprintln!("led handle not set; dropping led command"),
         }
     }
 
     #[allow(dead_code)]
     pub fn send_ble_command(&self, cmd: crate::app::ble::ble_command::BleCommand) {
-        if let Some(handle) = self.ble_handle.lock().unwrap().as_ref() {
-            let _ = handle.tx.send(cmd);
+        match self
+            .ble_handle
+            .lock()
+            .expect("ble_handle mutex poisoned")
+            .as_ref()
+        {
+            Some(handle) => {
+                if let Err(e) = handle.tx.send(cmd) {
+                    eprintln!("failed to send ble command: {e}");
+                }
+            }
+            None => eprintln!("ble handle not set; dropping ble command"),
         }
     }
 
     pub fn set_button_event_tx(&self, tx: mpsc::Sender<ButtonEvent>) {
-        *self.button_event_tx.lock().unwrap() = Some(tx);
+        *self
+            .button_event_tx
+            .lock()
+            .expect("button_event_tx mutex poisoned") = Some(tx);
     }
 
     pub fn send_button_event(&self, event: ButtonEvent) {
-        if let Some(tx) = self.button_event_tx.lock().unwrap().as_ref() {
-            let _ = tx.send(event);
+        match self
+            .button_event_tx
+            .lock()
+            .expect("button_event_tx mutex poisoned")
+            .as_ref()
+        {
+            Some(tx) => {
+                if let Err(e) = tx.send(event) {
+                    eprintln!("failed to send button event: {e}");
+                }
+            }
+            None => eprintln!("button event channel not set; dropping event"),
         }
     }
 
     pub fn set_ble_event_tx(&self, tx: mpsc::Sender<BleEvent>) {
-        *self.ble_event_tx.lock().unwrap() = Some(tx);
+        *self
+            .ble_event_tx
+            .lock()
+            .expect("ble_event_tx mutex poisoned") = Some(tx);
     }
 
     pub fn send_ble_event(&self, event: BleEvent) {
-        if let Some(tx) = self.ble_event_tx.lock().unwrap().as_ref() {
-            let _ = tx.send(event);
+        match self
+            .ble_event_tx
+            .lock()
+            .expect("ble_event_tx mutex poisoned")
+            .as_ref()
+        {
+            Some(tx) => {
+                if let Err(e) = tx.send(event) {
+                    eprintln!("failed to send ble event: {e}");
+                }
+            }
+            None => eprintln!("ble event channel not set; dropping event"),
         }
     }
 }

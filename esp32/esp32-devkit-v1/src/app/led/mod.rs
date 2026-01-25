@@ -4,42 +4,21 @@ pub mod led_handle;
 mod led_runner;
 pub mod led_task;
 
-use esp_idf_hal::delay::FreeRtos;
-use esp_idf_hal::gpio::{Gpio12, Output, PinDriver};
+use esp_idf_hal::gpio::{Output, PinDriver};
 
 use crate::app::led::led_command::LedCommand;
 use crate::common::{Error, Result};
+use crate::config::pins::LedPinType;
 
 pub struct Led {
-    #[allow(dead_code)]
-    pin: PinDriver<'static, Gpio12, Output>,
-    #[allow(dead_code)]
-    phase_on: bool, // 点滅のON/OFF位相
+    pin: PinDriver<'static, LedPinType, Output>,
 }
 
 impl Led {
-    pub fn new(pin: PinDriver<'static, Gpio12, Output>) -> Self {
-        Self {
-            pin,
-            phase_on: false,
-        }
+    pub fn new(pin: PinDriver<'static, LedPinType, Output>) -> Self {
+        Self { pin }
     }
 
-    #[allow(dead_code)]
-    fn tick(&mut self, interval_ms: u32) -> Result<()> {
-        // 位相を反転して1ステップだけ実行
-
-        self.phase_on = !self.phase_on;
-        if self.phase_on {
-            self.on()?;
-        } else {
-            self.off()?;
-        }
-        FreeRtos::delay_ms(interval_ms);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
     pub fn on(&mut self) -> Result<()> {
         self.pin
             .set_high()
@@ -47,7 +26,6 @@ impl Led {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn off(&mut self) -> Result<()> {
         self.pin
             .set_low()
