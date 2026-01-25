@@ -24,7 +24,16 @@ fn generate_pins_config() -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/pins.json");
     let cfg: PinConfig = match fs::read_to_string(config_path) {
         Ok(data) => serde_json::from_str(&data)?,
-        Err(_) => default,
+        Err(e) => {
+            eprintln!(
+                "Warning: failed to read pin configuration from {}: {}. Falling back to defaults (led={}, button={}).",
+                config_path.display(),
+                e,
+                default.led,
+                default.button,
+            );
+            default
+        }
     };
 
     // サポートするピンを制限し、安全に型を生成

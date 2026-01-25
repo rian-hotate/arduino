@@ -1,7 +1,7 @@
 pub mod event_coordinator;
 pub mod task_manager;
 
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex, PoisonError};
 
 use crate::app::ble::{ble_event::BleEvent, ble_handle::BleHandle};
 use crate::app::button::event::ButtonEvent;
@@ -27,90 +27,89 @@ impl Tasks {
         })
     }
 
+    // Helper to handle mutex poison gracefully
+    fn lock_or_log<'a, T>(mutex: &'a Mutex<T>, msg: &str) -> Option<std::sync::MutexGuard<'a, T>> {
+        match mutex.lock() {
+            Ok(guard) => Some(guard),
+            Err(PoisonError { .. }) => {
+                log::error!("mutex poisoned ({}); dropping operation", msg);
+                None
+            }
+        }
+    }
+
     pub fn set_led_handle(&self, handle: LedHandle) {
-        *self.led_handle.lock().expect("led_handle mutex poisoned") = Some(handle);
+        if let Some(mut guard) = Self::lock_or_log(&self.led_handle, "led_handle") {
+            *guard = Some(handle);
+        }
     }
 
     pub fn set_ble_handle(&self, handle: BleHandle) {
-        *self.ble_handle.lock().expect("ble_handle mutex poisoned") = Some(handle);
+        if let Some(mut guard) = Self::lock_or_log(&self.ble_handle, "ble_handle") {
+            *guard = Some(handle);
+        }
     }
 
     pub fn send_led_command(&self, cmd: crate::app::led::led_command::LedCommand) {
-        match self
-            .led_handle
-            .lock()
-            .expect("led_handle mutex poisoned")
-            .as_ref()
-        {
-            Some(handle) => {
-                if let Err(e) = handle.tx.send(cmd) {
-                    eprintln!("failed to send led command: {e}");
+        if let Some(guard) = Self::lock_or_log(&self.led_handle, "led_handle") {
+            match guard.as_ref() {
+                Some(handle) => {
+                    if let Err(e) = handle.tx.send(cmd) {
+                        log::error!("failed to send led command: {e}");
+                    }
                 }
+                None => log::warn!("led handle not set; dropping led command"),
             }
-            None => eprintln!("led handle not set; dropping led command"),
         }
     }
 
     #[allow(dead_code)]
     pub fn send_ble_command(&self, cmd: crate::app::ble::ble_command::BleCommand) {
-        match self
-            .ble_handle
-            .lock()
-            .expect("ble_handle mutex poisoned")
-            .as_ref()
-        {
-            Some(handle) => {
-                if let Err(e) = handle.tx.send(cmd) {
-                    eprintln!("failed to send ble command: {e}");
+        if let Some(guard) = Self::lock_or_log(&self.ble_handle, "ble_handle") {
+            match guard.as_ref() {
+                Some(handle) => {
+                    if let Err(e) = handle.tx.send(cmd) {
+                        log::error!("failed to send ble command: {e}");
+                    }
                 }
+                None => log::warn!("ble handle not set; dropping ble command"),
             }
-            None => eprintln!("ble handle not set; dropping ble command"),
         }
     }
 
     pub fn set_button_event_tx(&self, tx: mpsc::Sender<ButtonEvent>) {
-        *self
-            .button_event_tx
-            .lock()
-            .expect("button_event_tx mutex poisoned") = Some(tx);
+        if let Some(mut guard) = Self::lock_or_log(&self.button_event_tx, "button_event_tx") {
+            *guard = Some(tx);
+        }
     }
 
     pub fn send_button_event(&self, event: ButtonEvent) {
-        match self
-            .button_event_tx
-            .lock()
-            .expect("button_event_tx mutex poisoned")
-            .as_ref()
-        {
-            Some(tx) => {
+        if let Some(guard) = Self::lock_or_log(&self.button_event_tx, "button_event_tx") {
+            if let Some(tx) = guard.as_ref() {
                 if let Err(e) = tx.send(event) {
-                    eprintln!("failed to send button event: {e}");
+                    log::error!("failed to send button event: {e}");
                 }
+            } else {
+                log::warn!("button event channel not set; dropping event");
             }
-            None => eprintln!("button event channel not set; dropping event"),
         }
     }
 
     pub fn set_ble_event_tx(&self, tx: mpsc::Sender<BleEvent>) {
-        *self
-            .ble_event_tx
-            .lock()
-            .expect("ble_event_tx mutex poisoned") = Some(tx);
+        if let Some(mut guard) = Self::lock_or_log(&self.ble_event_tx, "ble_event_tx") {
+            *guard = Some(tx);
+        }
     }
 
     pub fn send_ble_event(&self, event: BleEvent) {
-        match self
-            .ble_event_tx
-            .lock()
-            .expect("ble_event_tx mutex poisoned")
-            .as_ref()
-        {
-            Some(tx) => {
+        if let Some(guard) = Self::lock_or_log(&self.ble_event_tx, "ble_event_tx") {
+            if let Some(tx) = guard.as_ref() {
                 if let Err(e) = tx.send(event) {
-                    eprintln!("failed to send ble event: {e}");
+                    log::error!("failed to send ble event: {e}");
                 }
+            } else {
+                log::warn!("ble event channel not set; dropping event");
             }
-            None => eprintln!("ble event channel not set; dropping event"),
         }
     }
 }

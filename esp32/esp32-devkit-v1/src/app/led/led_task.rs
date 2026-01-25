@@ -40,7 +40,9 @@ impl LedTask {
                                 let _ = led.off();
                             }
                             LedCommand::Blink { interval_ms } => {
-                                blink_interval = Some(interval_ms.max(20));
+                                // Constrain interval to [20ms, 65535ms] to prevent overflow
+                                // and ensure reasonable blink rates
+                                blink_interval = Some(interval_ms.max(20).min(65535));
                                 phase_on = false;
                                 elapsed_ms = 0;
                             }
@@ -52,6 +54,7 @@ impl LedTask {
                     }
 
                     // 点滅処理
+                    // Note: Timing assumes task loop execution is negligible vs 20ms delay
                     if let Some(interval) = blink_interval {
                         elapsed_ms = elapsed_ms.saturating_add(20);
                         if elapsed_ms >= interval {

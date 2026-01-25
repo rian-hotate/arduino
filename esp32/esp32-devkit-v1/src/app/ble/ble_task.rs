@@ -44,7 +44,7 @@ impl BleTask {
                                     }
                                     Err(e) => {
                                         tasks.send_ble_event(BleEvent::Error);
-                                        eprintln!("failed to start pairing: {e}");
+                                        log::error!("failed to start pairing: {e}");
                                     }
                                 }
                             }
@@ -54,8 +54,11 @@ impl BleTask {
                                 pairing_deadline = None;
                             }
                             BleCommand::Shutdown => {
+                                // On shutdown, perform cleanup without emitting an AdvertisingStopped
+                                // event, as the actual BLE state (connected, error, etc.) may differ
+                                // and the system is terminating anyway.
+                                let _ = ble.stop_pairing();
                                 let _ = ble.on_disconnected();
-                                tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 return;
                             }
                             _ => { /* 他コマンドは未実装 */ }

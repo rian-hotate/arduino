@@ -1,7 +1,6 @@
 pub mod ble_command;
 pub mod ble_event;
 pub mod ble_handle;
-mod ble_runner;
 mod ble_state;
 pub mod ble_task;
 
