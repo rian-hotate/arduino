@@ -1,105 +1,115 @@
-pub mod ble_task;
-pub mod button_task;
-pub mod led_task;
-pub mod ui_task;
+pub mod event_coordinator;
+pub mod task_manager;
 
-use core::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc, Mutex, PoisonError};
 
-use crate::app::{
-    ble::ConnState,
-    button::Button,
-    led::{Led, LedState},
-    tasks::{ble_task::BleTask, led_task::LedTask, ui_task::UiTask},
-};
-use crate::common::Result;
-use crate::config::pins::Pins;
+use crate::app::ble::{ble_event::BleEvent, ble_handle::BleHandle};
+use crate::app::button::event::ButtonEvent;
+use crate::app::led::led_handle::LedHandle;
 
-/// タスク間共有の状態を持つ構造体
+pub use task_manager::TaskManager;
+
+/// タスク間共有の状態を持つ構造体（各タスクのハンドルを保持）
 pub struct Tasks {
-    led_state: AtomicU8,
-    conn_state: AtomicU8,
+    led_handle: Mutex<Option<LedHandle>>,
+    ble_handle: Mutex<Option<BleHandle>>,
+    button_event_tx: Mutex<Option<mpsc::Sender<ButtonEvent>>>,
+    ble_event_tx: Mutex<Option<mpsc::Sender<BleEvent>>>,
 }
 
 impl Tasks {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            led_state: AtomicU8::new(LedState::Off as u8),
-            conn_state: AtomicU8::new(ConnState::Idle as u8),
+            led_handle: Mutex::new(None),
+            ble_handle: Mutex::new(None),
+            button_event_tx: Mutex::new(None),
+            ble_event_tx: Mutex::new(None),
         })
     }
 
-    pub fn set_led_state(&self, state: LedState) {
-        self.led_state.store(state as u8, Ordering::Relaxed);
-    }
-
-    pub fn get_led_state(&self) -> LedState {
-        LedState::from(self.led_state.load(Ordering::Relaxed))
-    }
-
-    pub fn set_ble_conn_state(&self, state: ConnState) {
-        self.conn_state.store(state as u8, Ordering::SeqCst);
-    }
-
-    pub fn get_ble_conn_state(&self) -> ConnState {
-        ConnState::from(self.conn_state.load(Ordering::SeqCst))
-    }
-}
-
-/// タスク起動の入口
-pub struct TaskManager {
-    pub tasks: Arc<Tasks>,
-    led_task: Option<led_task::LedTask>,
-    button_task: Option<button_task::ButtonTask>,
-    ble_task: Option<ble_task::BleTask>,
-    ui_task: Option<ui_task::UiTask>,
-}
-
-impl TaskManager {
-    pub fn new() -> Self {
-        Self {
-            tasks: Tasks::new(),
-            led_task: None,
-            button_task: None,
-            ble_task: None,
-            ui_task: None,
+    // Helper to handle mutex poison gracefully
+    fn lock_or_log<'a, T>(mutex: &'a Mutex<T>, msg: &str) -> Option<std::sync::MutexGuard<'a, T>> {
+        match mutex.lock() {
+            Ok(guard) => Some(guard),
+            Err(PoisonError { .. }) => {
+                log::error!("mutex poisoned ({}); dropping operation", msg);
+                None
+            }
         }
     }
 
-    pub fn start(&mut self) -> Result<()> {
-        let pins = Pins::take()?;
-        let led = Led::new(pins.led);
-        let button = Button::new(pins.button)?;
-
-        self.start_led_task(led)?;
-        self.start_button_task(button)?;
-        self.start_ble_task()?;
-        self.start_ui_task()?;
-
-        Ok(())
+    pub fn set_led_handle(&self, handle: LedHandle) {
+        if let Some(mut guard) = Self::lock_or_log(&self.led_handle, "led_handle") {
+            *guard = Some(handle);
+        }
     }
 
-    fn start_led_task(&mut self, led: crate::app::led::Led) -> Result<()> {
-        let t = LedTask::start(self.tasks.clone(), led)?;
-        self.led_task = Some(t);
-        Ok(())
+    pub fn set_ble_handle(&self, handle: BleHandle) {
+        if let Some(mut guard) = Self::lock_or_log(&self.ble_handle, "ble_handle") {
+            *guard = Some(handle);
+        }
     }
 
-    fn start_button_task(&mut self, button: crate::app::button::Button) -> Result<()> {
-        let t = button_task::ButtonTask::start(self.tasks.clone(), button)?;
-        self.button_task = Some(t);
-        Ok(())
+    pub fn send_led_command(&self, cmd: crate::app::led::led_command::LedCommand) {
+        if let Some(guard) = Self::lock_or_log(&self.led_handle, "led_handle") {
+            match guard.as_ref() {
+                Some(handle) => {
+                    if let Err(e) = handle.tx.send(cmd) {
+                        log::error!("failed to send led command: {e}");
+                    }
+                }
+                None => log::warn!("led handle not set; dropping led command"),
+            }
+        }
     }
 
-    fn start_ble_task(&mut self) -> Result<()> {
-        let t = BleTask::start(self.tasks.clone())?;
-        self.ble_task = Some(t);
-        Ok(())
+    #[allow(dead_code)]
+    pub fn send_ble_command(&self, cmd: crate::app::ble::ble_command::BleCommand) {
+        if let Some(guard) = Self::lock_or_log(&self.ble_handle, "ble_handle") {
+            match guard.as_ref() {
+                Some(handle) => {
+                    if let Err(e) = handle.tx.send(cmd) {
+                        log::error!("failed to send ble command: {e}");
+                    }
+                }
+                None => log::warn!("ble handle not set; dropping ble command"),
+            }
+        }
     }
 
-    fn start_ui_task(&mut self) -> Result<()> {
-        let t = UiTask::start(self.tasks.clone())?;
-        self.ui_task = Some(t);
-        Ok(())
+    pub fn set_button_event_tx(&self, tx: mpsc::Sender<ButtonEvent>) {
+        if let Some(mut guard) = Self::lock_or_log(&self.button_event_tx, "button_event_tx") {
+            *guard = Some(tx);
+        }
+    }
+
+    pub fn send_button_event(&self, event: ButtonEvent) {
+        if let Some(guard) = Self::lock_or_log(&self.button_event_tx, "button_event_tx") {
+            if let Some(tx) = guard.as_ref() {
+                if let Err(e) = tx.send(event) {
+                    log::error!("failed to send button event: {e}");
+                }
+            } else {
+                log::warn!("button event channel not set; dropping event");
+            }
+        }
+    }
+
+    pub fn set_ble_event_tx(&self, tx: mpsc::Sender<BleEvent>) {
+        if let Some(mut guard) = Self::lock_or_log(&self.ble_event_tx, "ble_event_tx") {
+            *guard = Some(tx);
+        }
+    }
+
+    pub fn send_ble_event(&self, event: BleEvent) {
+        if let Some(guard) = Self::lock_or_log(&self.ble_event_tx, "ble_event_tx") {
+            if let Some(tx) = guard.as_ref() {
+                if let Err(e) = tx.send(event) {
+                    log::error!("failed to send ble event: {e}");
+                }
+            } else {
+                log::warn!("ble event channel not set; dropping event");
+            }
+        }
     }
 }

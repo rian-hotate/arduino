@@ -1,35 +1,16 @@
+pub mod ble_command;
+pub mod ble_event;
+pub mod ble_handle;
+mod ble_state;
+pub mod ble_task;
+
 use esp32_nimble::{
     utilities::mutex::Mutex, uuid128, BLEAdvertisementData, BLEAdvertising, BLEDevice, BLEServer,
     NimbleProperties,
 };
 
-// src/app/ble.rs
 use crate::common::{Error, Result};
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ConnState {
-    Idle = 0,
-    Pairing = 1,
-    Connected = 2,
-    Disconnected = 3,
-    Error = 255,
-}
-
-impl From<u8> for ConnState {
-    fn from(v: u8) -> Self {
-        match v {
-            1 => ConnState::Pairing,
-            2 => ConnState::Connected,
-            3 => ConnState::Disconnected,
-            255 => ConnState::Error,
-            _ => ConnState::Idle,
-        }
-    }
-}
-
-/// BLE(ペリフェラル)を操作するための薄いラッパ
-/// - 実装の中身は今後 (NimBLE / Bluedroid 等) に差し替え可能
 pub struct Ble {
     advertising: bool,
     server: Option<&'static mut BLEServer>,
@@ -110,6 +91,7 @@ impl Ble {
     }
 
     /// 接続状態に応じた後処理（任意：必要になったら）
+    #[allow(dead_code)]
     pub fn on_connected(&mut self) -> Result<()> {
         // TODO: 接続後の処理
         Ok(())

@@ -1,3 +1,6 @@
+pub mod event;
+pub mod task;
+
 use crate::common::{Error, Result};
 
 use esp_idf_hal::gpio::{Gpio14, Input, PinDriver, Pull};
