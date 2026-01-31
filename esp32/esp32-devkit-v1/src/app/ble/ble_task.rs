@@ -26,9 +26,11 @@ impl BleTask {
             .name("ble_task".into())
             .stack_size(8192)
             .spawn(move || {
+                log::info!("BLE task started");
                 let mut ble = Ble::new();
                 let event_tasks = tasks.clone();
                 ble.set_event_sink(Arc::new(move |event| {
+                    log::debug!("BLE event emitted: {:?}", event);
                     event_tasks.send_ble_event(event);
                 }));
                 let mut pairing_deadline: Option<Instant> = None;
@@ -36,8 +38,10 @@ impl BleTask {
                 loop {
                     // コマンド処理
                     while let Ok(cmd) = rx.try_recv() {
+                        log::debug!("BLE command received: {:?}", cmd);
                         match cmd {
                             BleCommand::StartAdvertise { timeout_ms } => {
+                                log::info!("Processing StartAdvertise (timeout: {}ms)", timeout_ms);
                                 match ble.start_pairing() {
                                     Ok(()) => {
                                         tasks.send_ble_event(BleEvent::AdvertisingStarted);
@@ -45,21 +49,25 @@ impl BleTask {
                                             Instant::now()
                                                 + Duration::from_millis(timeout_ms as u64),
                                         );
+                                        log::info!("Advertising started, waiting for connections");
                                     }
                                     Err(e) => {
                                         tasks.send_ble_event(BleEvent::Error);
-                                        log::error!("failed to start pairing: {e}");
+                                        log::error!("Failed to start pairing: {e}");
                                     }
                                 }
                             }
                             BleCommand::StopAdvertise => {
+                                log::info!("Processing StopAdvertise");
                                 let _ = ble.stop_pairing();
                                 tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 pairing_deadline = None;
                             }
                             BleCommand::Shutdown => {
+                                log::info!("Processing Shutdown");
                                 let _ = ble.stop_pairing();
                                 let _ = ble.on_disconnected();
+                                log::info!("BLE task shutting down");
                                 return;
                             }
                         }
@@ -68,6 +76,7 @@ impl BleTask {
                     // タイムアウト処理
                     if let Some(deadline) = pairing_deadline {
                         if Instant::now() >= deadline {
+                            log::warn!("Pairing timeout reached");
                             let _ = ble.stop_pairing();
                             tasks.send_ble_event(BleEvent::AdvertisingStopped);
                             pairing_deadline = None;
