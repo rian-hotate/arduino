@@ -10,6 +10,7 @@ use esp32_nimble::{
 };
 
 use crate::common::{Error, Result};
+use crate::config::ble::BleConfig;
 
 pub struct Ble {
     advertising: bool,
@@ -37,11 +38,13 @@ impl Ble {
         let advertiser = device.get_advertising();
 
         // ===== GATT Service（最小）=====
-        let service = server.create_service(uuid128!("9b574847-f706-436c-bed7-fc01eb0965c1"));
-        let chr = service.lock().create_characteristic(
-            uuid128!("681285a6-247f-48c6-80ad-68c3dce18585"),
-            NimbleProperties::READ,
-        );
+        let service = server.create_service(uuid128!(BleConfig::SERVICE_UUID));
+        let chr = service
+            .lock()
+            .create_characteristic(
+                uuid128!(BleConfig::CHARACTERISTIC_UUID),
+                NimbleProperties::READ,
+            );
         chr.lock().set_value(b"hello");
 
         // ===== Advertise データ =====
@@ -49,8 +52,8 @@ impl Ble {
             .lock()
             .set_data(
                 BLEAdvertisementData::new()
-                    .name("esp32-devkit-v1")
-                    .add_service_uuid(uuid128!("9b574847-f706-436c-bed7-fc01eb0965c1")),
+                    .name(BleConfig::DEVICE_NAME)
+                    .add_service_uuid(uuid128!(BleConfig::SERVICE_UUID)),
             )
             .map_err(|e| Error::new_esp(&format!("set adv data failed: {e:?}")))?;
 
