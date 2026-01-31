@@ -45,6 +45,7 @@ impl BleTask {
                                 log::info!("Processing StartAdvertise (timeout: {}ms)", timeout_ms);
                                 match ble.start_pairing() {
                                     Ok(()) => {
+                                        ble.set_error(false);
                                         tasks.send_ble_event(BleEvent::AdvertisingStarted);
                                         pairing_deadline = Some(
                                             Instant::now()
@@ -53,6 +54,7 @@ impl BleTask {
                                         log::info!("Advertising started, waiting for connections");
                                     }
                                     Err(e) => {
+                                        ble.set_error(true);
                                         tasks.send_ble_event(BleEvent::Error);
                                         log::error!("Failed to start pairing: {e}");
                                     }
@@ -61,13 +63,18 @@ impl BleTask {
                             BleCommand::StopAdvertise => {
                                 log::info!("Processing StopAdvertise");
                                 let _ = ble.stop_pairing();
+                                ble.set_error(false);
                                 tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 pairing_deadline = None;
                             }
                             BleCommand::GetState => {
-                                let is_connected = ble.is_connected();
-                                log::debug!("Processing GetState: is_connected={}", is_connected);
-                                tasks.send_ble_event(BleEvent::StateResponse(is_connected));
+                                let state = ble.state();
+                                log::debug!(
+                                    "Processing GetState: connected={}, advertising={}",
+                                    state.connected,
+                                    state.advertising
+                                );
+                                tasks.send_ble_event(BleEvent::StateResponse(state));
                             }
                             BleCommand::Shutdown => {
                                 log::info!("Processing Shutdown");

@@ -1,19 +1,26 @@
 pub mod ble_command;
 pub mod ble_event;
 pub mod ble_handle;
+pub mod ble_state;
 pub mod ble_task;
 
 use esp32_nimble::{
     utilities::mutex::Mutex, uuid128, BLEAdvertisementData, BLEAdvertising, BLEDevice, BLEServer,
     NimbleProperties,
 };
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use crate::app::ble::ble_event::BleEvent;
+use crate::app::ble::ble_state::BleState;
 use crate::common::{Error, Result};
 use crate::config::ble::BleConfig;
 
 pub struct Ble {
+    advertising: Arc<AtomicBool>,
+    error: Arc<AtomicBool>,
     server: Option<&'static mut BLEServer>,
     advertiser: Option<&'static Mutex<BLEAdvertising>>,
     event_sink: Option<Arc<dyn Fn(BleEvent) + Send + Sync>>,
@@ -22,6 +29,8 @@ pub struct Ble {
 impl Ble {
     pub fn new() -> Self {
         Self {
+            advertising: Arc::new(AtomicBool::new(false)),
+            error: Arc::new(AtomicBool::new(false)),
             advertiser: None,
             server: None,
             event_sink: None,
@@ -68,10 +77,12 @@ impl Ble {
             let connect_sink = sink.clone();
             let disconnect_sink = sink.clone();
             let advertiser_on_connect = advertiser;
+            let advertising_state = self.advertising.clone();
 
             server.on_connect(move |_, _| {
                 log::info!("BLE device connected - auto-stopping advertising");
                 let _ = advertiser_on_connect.lock().stop();
+                advertising_state.store(false, Ordering::Relaxed);
                 (connect_sink)(BleEvent::Connected);
             });
 
@@ -111,6 +122,7 @@ impl Ble {
             adv.lock()
                 .start()
                 .map_err(|e| Error::new_esp(&format!("adv start failed: {e:?}")))?;
+            self.advertising.store(true, Ordering::Relaxed);
             log::info!("Advertising started");
         }
         Ok(())
@@ -122,6 +134,7 @@ impl Ble {
         if let Some(adv) = &self.advertiser {
             let _ = adv.lock().stop();
         }
+        self.advertising.store(false, Ordering::Relaxed);
         log::info!("Advertising stopped");
         Ok(())
     }
@@ -137,6 +150,30 @@ impl Ble {
             server.connected_count() > 0
         } else {
             false
+        }
+    }
+
+    /// 現在のアドバタイズ状態を取得
+    pub fn is_advertising(&self) -> bool {
+        self.advertising.load(Ordering::Relaxed)
+    }
+
+    /// エラー状態を設定
+    pub fn set_error(&self, value: bool) {
+        self.error.store(value, Ordering::Relaxed)
+    }
+
+    /// 現在のエラー状態を取得
+    pub fn has_error(&self) -> bool {
+        self.error.load(Ordering::Relaxed)
+    }
+
+    /// 現在のBLE状態を取得
+    pub fn state(&self) -> BleState {
+        BleState {
+            connected: self.is_connected(),
+            advertising: self.is_advertising(),
+            error: self.has_error(),
         }
     }
 }

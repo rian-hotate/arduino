@@ -50,10 +50,13 @@ impl EventCoordinator {
                     // BLEイベント処理
                     while let Ok(event) = ble_rx.try_recv() {
                         log::debug!("BLE event received: {:?}", event);
-                        let led_cmd = match event {
+                        match event {
                             BleEvent::AdvertisingStarted => {
-                                log::info!("BLE: Advertising started, LED blinking (500ms)");
-                                Some(LedCommand::Blink { interval_ms: 500 })
+                                log::info!(
+                                    "BLE: Advertising started, checking connection state..."
+                                );
+                                tasks.send_ble_command(BleCommand::GetState);
+                                // StateResponse を待つ
                             }
                             BleEvent::AdvertisingStopped => {
                                 // 接続状態を確認して LED 制御を決定
@@ -61,36 +64,39 @@ impl EventCoordinator {
                                     "BLE: Advertising stopped, checking connection state..."
                                 );
                                 tasks.send_ble_command(BleCommand::GetState);
-                                None // StateResponse を待つ
+                                // StateResponse を待つ
                             }
                             BleEvent::Connected => {
                                 // 接続成功時は状態確認後にLED制御
                                 log::info!("BLE: Connected! Checking state");
                                 tasks.send_ble_command(BleCommand::GetState);
-                                None // StateResponse を待つ
+                                // StateResponse を待つ
                             }
                             BleEvent::Disconnected => {
-                                log::info!("BLE: Disconnected, LED off");
-                                Some(LedCommand::Off)
+                                log::info!("BLE: Disconnected, waiting for state response");
+                                tasks.send_ble_command(BleCommand::GetState);
                             }
                             BleEvent::Error => {
-                                log::warn!("BLE: Error detected, LED blinking (100ms)");
-                                Some(LedCommand::Blink { interval_ms: 100 })
+                                log::warn!("BLE: Error detected, checking state");
+                                tasks.send_ble_command(BleCommand::GetState);
                             }
-                            BleEvent::StateResponse(is_connected) => {
-                                if is_connected {
+                            BleEvent::StateResponse(state) => {
+                                let cmd = if state.error {
+                                    log::warn!("BLE: Error state, LED blinking (100ms)");
+                                    LedCommand::Blink { interval_ms: 100 }
+                                } else if state.connected {
                                     log::info!("BLE: Connected, LED ON");
-                                    Some(LedCommand::On)
+                                    LedCommand::On
+                                } else if state.advertising {
+                                    log::info!("BLE: Advertising, LED blinking (500ms)");
+                                    LedCommand::Blink { interval_ms: 500 }
                                 } else {
                                     log::info!("BLE: Not connected, LED off");
-                                    Some(LedCommand::Off)
-                                }
+                                    LedCommand::Off
+                                };
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
-                        };
-                        // LED タスクのキューにコマンドを送信
-                        if let Some(cmd) = led_cmd {
-                            log::debug!("Sending LED command: {:?}", cmd);
-                            tasks.send_led_command(cmd);
                         }
                     }
 
