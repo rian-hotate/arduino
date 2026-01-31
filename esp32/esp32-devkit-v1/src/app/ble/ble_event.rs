@@ -11,4 +11,6 @@ pub enum BleEvent {
     Disconnected,
     /// エラー発生
     Error,
+    /// 接続状態応答 (true = 接続中, false = 未接続)
+    StateResponse(bool),
 }

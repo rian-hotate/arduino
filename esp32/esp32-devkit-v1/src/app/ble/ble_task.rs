@@ -29,6 +29,7 @@ impl BleTask {
                 log::info!("BLE task started");
                 let mut ble = Ble::new();
                 let event_tasks = tasks.clone();
+
                 ble.set_event_sink(Arc::new(move |event| {
                     log::debug!("BLE event emitted: {:?}", event);
                     event_tasks.send_ble_event(event);
@@ -62,6 +63,11 @@ impl BleTask {
                                 let _ = ble.stop_pairing();
                                 tasks.send_ble_event(BleEvent::AdvertisingStopped);
                                 pairing_deadline = None;
+                            }
+                            BleCommand::GetState => {
+                                let is_connected = ble.is_connected();
+                                log::debug!("Processing GetState: is_connected={}", is_connected);
+                                tasks.send_ble_event(BleEvent::StateResponse(is_connected));
                             }
                             BleCommand::Shutdown => {
                                 log::info!("Processing Shutdown");

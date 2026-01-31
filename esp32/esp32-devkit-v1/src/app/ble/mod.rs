@@ -14,7 +14,6 @@ use crate::common::{Error, Result};
 use crate::config::ble::BleConfig;
 
 pub struct Ble {
-    advertising: bool,
     server: Option<&'static mut BLEServer>,
     advertiser: Option<&'static Mutex<BLEAdvertising>>,
     event_sink: Option<Arc<dyn Fn(BleEvent) + Send + Sync>>,
@@ -23,7 +22,6 @@ pub struct Ble {
 impl Ble {
     pub fn new() -> Self {
         Self {
-            advertising: false,
             advertiser: None,
             server: None,
             event_sink: None,
@@ -46,25 +44,40 @@ impl Ble {
         let server = device.get_server();
         let advertiser = device.get_advertising();
 
+        // 切断時の自動アドバタイズ再開を無効化
+        server.advertise_on_disconnect(false);
+
         // ===== GATT Service（最小）=====
         let service = server.create_service(uuid128!(BleConfig::SERVICE_UUID));
         let chr = service.lock().create_characteristic(
             uuid128!(BleConfig::CHARACTERISTIC_UUID),
             NimbleProperties::READ,
         );
+
+        // キャラクタリスティックに値を設定
         chr.lock().set_value(b"hello");
+
+        log::info!(
+            "GATT service created: {}, characteristic: {}",
+            BleConfig::SERVICE_UUID,
+            BleConfig::CHARACTERISTIC_UUID
+        );
         log::debug!("GATT service and characteristic created");
 
         if let Some(sink) = self.event_sink.as_ref().cloned() {
             let connect_sink = sink.clone();
+            let disconnect_sink = sink.clone();
+            let advertiser_on_connect = advertiser;
+
             server.on_connect(move |_, _| {
-                log::info!("BLE device connected");
+                log::info!("BLE device connected - auto-stopping advertising");
+                let _ = advertiser_on_connect.lock().stop();
                 (connect_sink)(BleEvent::Connected);
             });
 
             server.on_disconnect(move |_, _| {
                 log::info!("BLE device disconnected");
-                (sink)(BleEvent::Disconnected);
+                (disconnect_sink)(BleEvent::Disconnected);
             });
             log::debug!("Connection callbacks registered");
         } else {
@@ -94,16 +107,10 @@ impl Ble {
         log::debug!("start_pairing called");
         self.init()?;
 
-        if self.advertising {
-            log::debug!("Already advertising");
-            return Ok(());
-        }
-
         if let Some(adv) = &self.advertiser {
             adv.lock()
                 .start()
                 .map_err(|e| Error::new_esp(&format!("adv start failed: {e:?}")))?;
-            self.advertising = true;
             log::info!("Advertising started");
         }
         Ok(())
@@ -112,15 +119,9 @@ impl Ble {
     /// ペアリング(アドバタイズ)停止
     pub fn stop_pairing(&mut self) -> Result<()> {
         log::debug!("stop_pairing called");
-        if !self.advertising {
-            log::debug!("Not advertising");
-            return Ok(());
-        }
-
         if let Some(adv) = &self.advertiser {
             let _ = adv.lock().stop();
         }
-        self.advertising = false;
         log::info!("Advertising stopped");
         Ok(())
     }
@@ -128,5 +129,14 @@ impl Ble {
     pub fn on_disconnected(&mut self) -> Result<()> {
         // TODO: 切断後の処理
         Ok(())
+    }
+
+    /// 現在のBLE接続状態を取得
+    pub fn is_connected(&self) -> bool {
+        if let Some(server) = &self.server {
+            server.connected_count() > 0
+        } else {
+            false
+        }
     }
 }

@@ -25,35 +25,77 @@ impl EventCoordinator {
         let h = thread::Builder::new()
             .name("event_coordinator".into())
             .stack_size(4096)
-            .spawn(move || loop {
-                // ボタンイベント処理
-                while let Ok(event) = button_rx.try_recv() {
-                    match event {
-                        ButtonEvent::LongPress => {
-                            // 長押し：BLEアドバタイズ開始
-                            tasks
-                                .send_ble_command(BleCommand::StartAdvertise { timeout_ms: 60000 });
-                        }
-                        ButtonEvent::ShortPress => {
-                            // 短押し：将来の拡張用
+            .spawn(move || {
+                log::info!("Event coordinator started");
+
+                loop {
+                    // ボタンイベント処理
+                    while let Ok(event) = button_rx.try_recv() {
+                        log::debug!("Button event received: {:?}", event);
+                        match event {
+                            ButtonEvent::LongPress => {
+                                // 長押し：BLEアドバタイズ開始
+                                log::info!("Button: Long press detected, starting BLE advertising");
+                                tasks.send_ble_command(BleCommand::StartAdvertise {
+                                    timeout_ms: 60000,
+                                });
+                            }
+                            ButtonEvent::ShortPress => {
+                                // 短押し：将来の拡張用
+                                log::debug!("Button: Short press detected (not yet implemented)");
+                            }
                         }
                     }
-                }
 
-                // BLEイベント処理
-                while let Ok(event) = ble_rx.try_recv() {
-                    let led_cmd = match event {
-                        BleEvent::AdvertisingStarted => LedCommand::Blink { interval_ms: 500 },
-                        BleEvent::AdvertisingStopped => LedCommand::Off,
-                        BleEvent::Connected => LedCommand::On,
-                        BleEvent::Disconnected => LedCommand::Blink { interval_ms: 1000 },
-                        BleEvent::Error => LedCommand::Blink { interval_ms: 100 },
-                    };
-                    // LED タスクのキューにコマンドを送信
-                    tasks.send_led_command(led_cmd);
-                }
+                    // BLEイベント処理
+                    while let Ok(event) = ble_rx.try_recv() {
+                        log::debug!("BLE event received: {:?}", event);
+                        let led_cmd = match event {
+                            BleEvent::AdvertisingStarted => {
+                                log::info!("BLE: Advertising started, LED blinking (500ms)");
+                                Some(LedCommand::Blink { interval_ms: 500 })
+                            }
+                            BleEvent::AdvertisingStopped => {
+                                // 接続状態を確認して LED 制御を決定
+                                log::debug!(
+                                    "BLE: Advertising stopped, checking connection state..."
+                                );
+                                tasks.send_ble_command(BleCommand::GetState);
+                                None // StateResponse を待つ
+                            }
+                            BleEvent::Connected => {
+                                // 接続成功時は状態確認後にLED制御
+                                log::info!("BLE: Connected! Checking state");
+                                tasks.send_ble_command(BleCommand::GetState);
+                                None // StateResponse を待つ
+                            }
+                            BleEvent::Disconnected => {
+                                log::info!("BLE: Disconnected, LED off");
+                                Some(LedCommand::Off)
+                            }
+                            BleEvent::Error => {
+                                log::warn!("BLE: Error detected, LED blinking (100ms)");
+                                Some(LedCommand::Blink { interval_ms: 100 })
+                            }
+                            BleEvent::StateResponse(is_connected) => {
+                                if is_connected {
+                                    log::info!("BLE: Connected, LED ON");
+                                    Some(LedCommand::On)
+                                } else {
+                                    log::info!("BLE: Not connected, LED off");
+                                    Some(LedCommand::Off)
+                                }
+                            }
+                        };
+                        // LED タスクのキューにコマンドを送信
+                        if let Some(cmd) = led_cmd {
+                            log::debug!("Sending LED command: {:?}", cmd);
+                            tasks.send_led_command(cmd);
+                        }
+                    }
 
-                FreeRtos::delay_ms(20);
+                    FreeRtos::delay_ms(20);
+                }
             })
             .map_err(|e| {
                 Error::new_unexpected(&format!("failed to spawn event_coordinator: {e}"))

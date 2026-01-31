@@ -5,6 +5,8 @@ pub enum BleCommand {
     },
     #[allow(dead_code)]
     StopAdvertise,
+    /// 現在のBLE接続状態を取得
+    GetState,
     #[allow(dead_code)]
     Shutdown,
 }
