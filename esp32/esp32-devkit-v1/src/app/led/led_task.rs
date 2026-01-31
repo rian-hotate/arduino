@@ -47,9 +47,6 @@ impl LedTask {
                                 elapsed_ms = 0;
                             }
                             LedCommand::Shutdown => return,
-                            LedCommand::GetStatus => {
-                                // 未使用：必要なら後で実装
-                            }
                         }
                     }
 

@@ -9,7 +9,7 @@ use crate::app::led::led_handle::LedHandle;
 
 pub use task_manager::TaskManager;
 
-/// タスク間共有の状態を持つ構造体（各タスクのハンドルを保持）
+/// タスク間共有の状態を持つ構造体
 pub struct Tasks {
     led_handle: Mutex<Option<LedHandle>>,
     ble_handle: Mutex<Option<BleHandle>>,

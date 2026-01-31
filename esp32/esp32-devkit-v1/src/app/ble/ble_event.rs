@@ -6,12 +6,9 @@ pub enum BleEvent {
     /// アドバタイズ停止
     AdvertisingStopped,
     /// デバイス接続
-    #[allow(dead_code)]
     Connected,
     /// デバイス切断
-    #[allow(dead_code)]
     Disconnected,
     /// エラー発生
-    #[allow(dead_code)]
     Error,
 }

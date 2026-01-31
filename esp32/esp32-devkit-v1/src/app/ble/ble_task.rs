@@ -27,6 +27,10 @@ impl BleTask {
             .stack_size(8192)
             .spawn(move || {
                 let mut ble = Ble::new();
+                let event_tasks = tasks.clone();
+                ble.set_event_sink(Arc::new(move |event| {
+                    event_tasks.send_ble_event(event);
+                }));
                 let mut pairing_deadline: Option<Instant> = None;
 
                 loop {
@@ -54,14 +58,10 @@ impl BleTask {
                                 pairing_deadline = None;
                             }
                             BleCommand::Shutdown => {
-                                // On shutdown, perform cleanup without emitting an AdvertisingStopped
-                                // event, as the actual BLE state (connected, error, etc.) may differ
-                                // and the system is terminating anyway.
                                 let _ = ble.stop_pairing();
                                 let _ = ble.on_disconnected();
                                 return;
                             }
-                            _ => { /* 他コマンドは未実装 */ }
                         }
                     }
 
