@@ -3,7 +3,7 @@ use std::sync::mpsc;
 
 use crate::app::ble::ble_command::BleCommand;
 
-/// 外部公開：BLE状態を送るためのハンドル（Queue送信のみ）
+/// 外部公開：BLEコマンドを送るためのハンドル（Queue送信のみ）
 #[derive(Clone)]
 pub struct BleHandle {
     pub(crate) tx: mpsc::Sender<BleCommand>,

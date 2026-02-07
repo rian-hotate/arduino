@@ -1,7 +1,7 @@
 pub mod ble_command;
 pub mod ble_event;
 pub mod ble_handle;
-pub mod ble_state;
+mod ble_state;
 pub mod ble_task;
 
 use esp32_nimble::{
