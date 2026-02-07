@@ -62,9 +62,17 @@ impl BleTask {
                             }
                             BleCommand::StopAdvertise => {
                                 log::info!("Processing StopAdvertise");
-                                let _ = ble.stop_pairing();
-                                ble.set_error(false);
-                                tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                match ble.stop_pairing() {
+                                    Ok(()) => {
+                                        ble.set_error(false);
+                                        tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                    }
+                                    Err(e) => {
+                                        ble.set_error(true);
+                                        tasks.send_ble_event(BleEvent::Error);
+                                        log::error!("Failed to stop pairing: {e}");
+                                    }
+                                }
                                 pairing_deadline = None;
                             }
                             BleCommand::GetState => {
@@ -90,8 +98,16 @@ impl BleTask {
                     if let Some(deadline) = pairing_deadline {
                         if Instant::now() >= deadline {
                             log::warn!("Pairing timeout reached");
-                            let _ = ble.stop_pairing();
-                            tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                            match ble.stop_pairing() {
+                                Ok(()) => {
+                                    tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                }
+                                Err(e) => {
+                                    ble.set_error(true);
+                                    tasks.send_ble_event(BleEvent::Error);
+                                    log::error!("Failed to stop pairing on timeout: {e}");
+                                }
+                            }
                             pairing_deadline = None;
                         }
                     }

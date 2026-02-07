@@ -43,18 +43,17 @@ package "NimBLE" {
 User --> ButtonTask : ButtonEvent
 ButtonTask --> EventCoord : ButtonEvent
 
-EventCoord --> BleTask : BleCommand\n(StartAdvertise/StopAdvertise/GetState)
-BleTask --> Ble : start_pairing/stop_pairing\nstate()
-BleTask --> EventCoord : BleEvent\n(AdvertisingStarted/Stopped/Connected/Disconnected/Error/StateResponse)
+EventCoord --> BleTask : BleCommand\n(StartAdvertise/StopAdvertise)
+BleTask --> Ble : start_pairing/stop_pairing
+BleTask --> EventCoord : BleEvent\n(AdvertisingStarted/Stopped/Connected/Disconnected/Error)
 
 Ble --> BLEServer : on_connect/on_disconnect
 Ble --> BLEAdvertising : start/stop
-Ble --> BleState : state() generates
+Ble --> BleState : maintains current state
 
-EventCoord --> LedTask : LedCommand\n(only on StateResponse)
-EventCoord --> BleTask : BleCommand::GetState\n(on BLE events)
+EventCoord --> LedTask : LedCommand\n(on BLE events)
 
-BleState ..> BleEvent : StateResponse(BleState)
+BleState ..> BleEvent : (optional) StateResponse(BleState)
 
 @enduml
 ```

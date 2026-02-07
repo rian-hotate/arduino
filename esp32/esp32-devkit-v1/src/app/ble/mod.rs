@@ -149,10 +149,15 @@ impl Ble {
         }
 
         if let Some(adv) = &self.advertiser {
-            let _ = adv.lock().stop();
+            adv.lock()
+                .stop()
+                .map_err(|e| Error::new_esp(&format!("adv stop failed: {e:?}")))?;
+            self.advertising.store(false, Ordering::Relaxed);
+            log::info!("Advertising stopped");
+        } else {
+            log::warn!("Advertiser not initialized; skipping stop");
+            self.advertising.store(false, Ordering::Relaxed);
         }
-        self.advertising.store(false, Ordering::Relaxed);
-        log::info!("Advertising stopped");
         Ok(())
     }
 
