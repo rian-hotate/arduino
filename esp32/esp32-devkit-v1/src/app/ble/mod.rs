@@ -83,7 +83,7 @@ impl Ble {
                 log::info!("BLE device connected - auto-stopping advertising");
                 match advertiser_on_connect.lock().stop() {
                     Ok(_) => {
-                        advertising_state.store(false, Ordering::Relaxed);
+                        advertising_state.store(false, Ordering::Release);
                     }
                     Err(e) => {
                         log::error!("Failed to stop advertising on connect: {e:?}");
@@ -133,7 +133,7 @@ impl Ble {
             adv.lock()
                 .start()
                 .map_err(|e| Error::new_esp(&format!("adv start failed: {e:?}")))?;
-            self.advertising.store(true, Ordering::Relaxed);
+            self.advertising.store(true, Ordering::Release);
             log::info!("Advertising started");
         }
         Ok(())
@@ -152,11 +152,11 @@ impl Ble {
             adv.lock()
                 .stop()
                 .map_err(|e| Error::new_esp(&format!("adv stop failed: {e:?}")))?;
-            self.advertising.store(false, Ordering::Relaxed);
+            self.advertising.store(false, Ordering::Release);
             log::info!("Advertising stopped");
         } else {
             log::warn!("Advertiser not initialized; skipping stop");
-            self.advertising.store(false, Ordering::Relaxed);
+            self.advertising.store(false, Ordering::Release);
         }
         Ok(())
     }
@@ -177,17 +177,17 @@ impl Ble {
 
     /// 現在のアドバタイズ状態を取得
     pub fn is_advertising(&self) -> bool {
-        self.advertising.load(Ordering::Relaxed)
+        self.advertising.load(Ordering::Acquire)
     }
 
     /// エラー状態を設定
     pub fn set_error(&self, value: bool) {
-        self.error.store(value, Ordering::Relaxed)
+        self.error.store(value, Ordering::Release)
     }
 
     /// 現在のエラー状態を取得
     pub fn has_error(&self) -> bool {
-        self.error.load(Ordering::Relaxed)
+        self.error.load(Ordering::Acquire)
     }
 
     /// 現在のBLE状態を取得

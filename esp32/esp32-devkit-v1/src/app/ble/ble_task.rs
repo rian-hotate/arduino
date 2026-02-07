@@ -98,17 +98,24 @@ impl BleTask {
                     if let Some(deadline) = pairing_deadline {
                         if Instant::now() >= deadline {
                             log::warn!("Pairing timeout reached");
-                            match ble.stop_pairing() {
-                                Ok(()) => {
-                                    tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                            if ble.is_connected() {
+                                log::info!(
+                                    "Pairing timeout reached but device is connected; skipping stop_pairing"
+                                );
+                                pairing_deadline = None;
+                            } else {
+                                match ble.stop_pairing() {
+                                    Ok(()) => {
+                                        tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                    }
+                                    Err(e) => {
+                                        ble.set_error(true);
+                                        tasks.send_ble_event(BleEvent::Error);
+                                        log::error!("Failed to stop pairing on timeout: {e}");
+                                    }
                                 }
-                                Err(e) => {
-                                    ble.set_error(true);
-                                    tasks.send_ble_event(BleEvent::Error);
-                                    log::error!("Failed to stop pairing on timeout: {e}");
-                                }
+                                pairing_deadline = None;
                             }
-                            pairing_deadline = None;
                         }
                     }
 
