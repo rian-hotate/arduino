@@ -1,9 +1,12 @@
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub enum BleCommand {
-    StartAdvertise { timeout_ms: u32 },
+    StartAdvertise {
+        timeout_ms: u32,
+    },
+    #[allow(dead_code)]
     StopAdvertise,
-    DisconnectAll, // 全クライアント切断
-    GetStatus,     // ステータス取得
-    Shutdown,      // タスク終了
+    /// 現在のBLE接続状態を取得
+    GetState,
+    #[allow(dead_code)]
+    Shutdown,
 }

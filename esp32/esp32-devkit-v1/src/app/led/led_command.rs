@@ -1,9 +1,10 @@
 #[derive(PartialEq, Clone, Copy, Debug)]
-#[allow(dead_code)]
 pub enum LedCommand {
-    Blink { interval_ms: u32 },
+    Blink {
+        interval_ms: u32,
+    },
     On,
     Off,
-    GetStatus,
+    #[allow(dead_code)]
     Shutdown,
 }

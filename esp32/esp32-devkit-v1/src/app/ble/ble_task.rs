@@ -26,51 +26,96 @@ impl BleTask {
             .name("ble_task".into())
             .stack_size(8192)
             .spawn(move || {
+                log::info!("BLE task started");
                 let mut ble = Ble::new();
+                let event_tasks = tasks.clone();
+
+                ble.set_event_sink(Arc::new(move |event| {
+                    log::debug!("BLE event emitted: {:?}", event);
+                    event_tasks.send_ble_event(event);
+                }));
                 let mut pairing_deadline: Option<Instant> = None;
 
                 loop {
                     // コマンド処理
                     while let Ok(cmd) = rx.try_recv() {
+                        log::debug!("BLE command received: {:?}", cmd);
                         match cmd {
                             BleCommand::StartAdvertise { timeout_ms } => {
+                                log::info!("Processing StartAdvertise (timeout: {}ms)", timeout_ms);
                                 match ble.start_pairing() {
                                     Ok(()) => {
+                                        ble.set_error(false);
                                         tasks.send_ble_event(BleEvent::AdvertisingStarted);
                                         pairing_deadline = Some(
                                             Instant::now()
                                                 + Duration::from_millis(timeout_ms as u64),
                                         );
+                                        log::info!("Advertising started, waiting for connections");
                                     }
                                     Err(e) => {
+                                        ble.set_error(true);
                                         tasks.send_ble_event(BleEvent::Error);
-                                        log::error!("failed to start pairing: {e}");
+                                        log::error!("Failed to start pairing: {e}");
                                     }
                                 }
                             }
                             BleCommand::StopAdvertise => {
-                                let _ = ble.stop_pairing();
-                                tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                log::info!("Processing StopAdvertise");
+                                match ble.stop_pairing() {
+                                    Ok(()) => {
+                                        ble.set_error(false);
+                                        tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                    }
+                                    Err(e) => {
+                                        ble.set_error(true);
+                                        tasks.send_ble_event(BleEvent::Error);
+                                        log::error!("Failed to stop pairing: {e}");
+                                    }
+                                }
                                 pairing_deadline = None;
                             }
+                            BleCommand::GetState => {
+                                let state = ble.state();
+                                log::debug!(
+                                    "Processing GetState: connected={}, advertising={}",
+                                    state.connected,
+                                    state.advertising
+                                );
+                                tasks.send_ble_event(BleEvent::StateResponse(state));
+                            }
                             BleCommand::Shutdown => {
-                                // On shutdown, perform cleanup without emitting an AdvertisingStopped
-                                // event, as the actual BLE state (connected, error, etc.) may differ
-                                // and the system is terminating anyway.
+                                log::info!("Processing Shutdown");
                                 let _ = ble.stop_pairing();
                                 let _ = ble.on_disconnected();
+                                log::info!("BLE task shutting down");
                                 return;
                             }
-                            _ => { /* 他コマンドは未実装 */ }
                         }
                     }
 
                     // タイムアウト処理
                     if let Some(deadline) = pairing_deadline {
                         if Instant::now() >= deadline {
-                            let _ = ble.stop_pairing();
-                            tasks.send_ble_event(BleEvent::AdvertisingStopped);
-                            pairing_deadline = None;
+                            log::warn!("Pairing timeout reached");
+                            if ble.is_connected() {
+                                log::info!(
+                                    "Pairing timeout reached but device is connected; skipping stop_pairing"
+                                );
+                                pairing_deadline = None;
+                            } else {
+                                match ble.stop_pairing() {
+                                    Ok(()) => {
+                                        tasks.send_ble_event(BleEvent::AdvertisingStopped);
+                                    }
+                                    Err(e) => {
+                                        ble.set_error(true);
+                                        tasks.send_ble_event(BleEvent::Error);
+                                        log::error!("Failed to stop pairing on timeout: {e}");
+                                    }
+                                }
+                                pairing_deadline = None;
+                            }
                         }
                     }
 
