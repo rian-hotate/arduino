@@ -81,8 +81,14 @@ impl Ble {
 
             server.on_connect(move |_, _| {
                 log::info!("BLE device connected - auto-stopping advertising");
-                let _ = advertiser_on_connect.lock().stop();
-                advertising_state.store(false, Ordering::Relaxed);
+                match advertiser_on_connect.lock().stop() {
+                    Ok(_) => {
+                        advertising_state.store(false, Ordering::Relaxed);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to stop advertising on connect: {e:?}");
+                    }
+                }
                 (connect_sink)(BleEvent::Connected);
             });
 
@@ -118,6 +124,11 @@ impl Ble {
         log::debug!("start_pairing called");
         self.init()?;
 
+        if self.is_advertising() {
+            log::debug!("Advertising already active, skipping start");
+            return Ok(());
+        }
+
         if let Some(adv) = &self.advertiser {
             adv.lock()
                 .start()
@@ -131,6 +142,12 @@ impl Ble {
     /// ペアリング(アドバタイズ)停止
     pub fn stop_pairing(&mut self) -> Result<()> {
         log::debug!("stop_pairing called");
+
+        if !self.is_advertising() {
+            log::debug!("Advertising already stopped, skipping stop");
+            return Ok(());
+        }
+
         if let Some(adv) = &self.advertiser {
             let _ = adv.lock().stop();
         }

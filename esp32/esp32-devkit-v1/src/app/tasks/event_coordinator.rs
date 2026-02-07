@@ -52,33 +52,34 @@ impl EventCoordinator {
                         log::debug!("BLE event received: {:?}", event);
                         match event {
                             BleEvent::AdvertisingStarted => {
-                                log::info!(
-                                    "BLE: Advertising started, checking connection state..."
-                                );
-                                tasks.send_ble_command(BleCommand::GetState);
-                                // StateResponse を待つ
+                                log::info!("BLE: Advertising started");
+                                let cmd = LedCommand::Blink { interval_ms: 500 };
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
                             BleEvent::AdvertisingStopped => {
-                                // 接続状態を確認して LED 制御を決定
-                                log::debug!(
-                                    "BLE: Advertising stopped, checking connection state..."
-                                );
-                                tasks.send_ble_command(BleCommand::GetState);
-                                // StateResponse を待つ
+                                log::debug!("BLE: Advertising stopped");
+                                let cmd = LedCommand::Off;
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
                             BleEvent::Connected => {
-                                // 接続成功時は状態確認後にLED制御
-                                log::info!("BLE: Connected! Checking state");
-                                tasks.send_ble_command(BleCommand::GetState);
-                                // StateResponse を待つ
+                                log::info!("BLE: Connected");
+                                let cmd = LedCommand::On;
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
                             BleEvent::Disconnected => {
-                                log::info!("BLE: Disconnected, waiting for state response");
-                                tasks.send_ble_command(BleCommand::GetState);
+                                log::info!("BLE: Disconnected");
+                                let cmd = LedCommand::Off;
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
                             BleEvent::Error => {
-                                log::warn!("BLE: Error detected, checking state");
-                                tasks.send_ble_command(BleCommand::GetState);
+                                log::warn!("BLE: Error detected");
+                                let cmd = LedCommand::Blink { interval_ms: 100 };
+                                log::debug!("Sending LED command: {:?}", cmd);
+                                tasks.send_led_command(cmd);
                             }
                             BleEvent::StateResponse(state) => {
                                 let cmd = if state.error {
